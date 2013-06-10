@@ -75,6 +75,8 @@ static unsigned long
 SSL_pthreads_thread_id()
 {
   EThread *eth = this_ethread();
+  if (eth == NULL)
+    return pthread_self();
   return (unsigned long) (eth->id);
 }
 
