@@ -5530,6 +5530,16 @@ TSHttpTxnReenable(TSHttpTxn txnp, TSEvent event)
   }
 }
 
+void
+TSHttpTxnReenableFromThread(TSHttpTxn txnp, TSEvent event)
+{
+  sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
+
+  HttpSM *sm = (HttpSM *) txnp;
+
+  eventProcessor.schedule_imm(NEW(new TSHttpSMCallback(sm, event)), ET_NET);
+}
+
 TSReturnCode
 TSHttpArgIndexReserve(const char* name, const char* description, int *arg_idx)
 {

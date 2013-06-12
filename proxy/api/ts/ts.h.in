@@ -2479,6 +2479,7 @@ extern "C"
 
    */
   tsapi void TSHttpTxnReenable(TSHttpTxn txnp, TSEvent event);
+  tsapi void TSHttpTxnReenableFromThread(TSHttpTxn txnp, TSEvent event);
   tsapi TSReturnCode TSHttpCacheReenable(TSCacheTxn txnp, const TSEvent event, const void* data, const uint64_t size);
   tsapi TSReturnCode TSHttpTxnFollowRedirect(TSHttpTxn txnp, int on);
 
