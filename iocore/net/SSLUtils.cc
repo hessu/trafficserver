@@ -46,7 +46,13 @@ typedef const SSL_METHOD * ink_ssl_method_t;
 typedef SSL_METHOD * ink_ssl_method_t;
 #endif
 
+#define THREADED_PLUGIN_COMPATIBILITY
+
+#ifdef THREADED_PLUGIN_COMPATIBILITY
+static pthread_mutex_t *mutex_buf = NULL;
+#else
 static ProxyMutex ** sslMutexArray;
+#endif
 static bool open_ssl_initialized = false;
 
 struct ats_file_bio
@@ -71,6 +77,32 @@ private:
     ats_file_bio& operator=(const ats_file_bio&);
 };
 
+#ifdef THREADED_PLUGIN_COMPATIBILITY
+
+/* pthread wrapping for openssl */
+#define MUTEX_CLEANUP(x) pthread_mutex_destroy(&(x))
+
+
+static void
+SSL_locking_callback(int mode, int type, const char * file, int line)
+{
+  NOWARN_UNUSED(file);
+  NOWARN_UNUSED(line);
+  
+  if (mode & CRYPTO_LOCK)
+    pthread_mutex_lock(&mutex_buf[type]);
+  else
+    pthread_mutex_unlock(&mutex_buf[type]);
+}
+
+static unsigned long
+SSL_pthreads_thread_id()
+{
+  return ((unsigned long)pthread_self());
+}
+
+#else
+
 static unsigned long
 SSL_pthreads_thread_id()
 {
@@ -94,6 +126,8 @@ SSL_locking_callback(int mode, int type, const char * /* file ATS_UNUSED */, int
     ink_assert(0);
   }
 }
+
+#endif
 
 static bool
 SSL_CTX_add_extra_chain_cert_file(SSL_CTX * ctx, const char * chainfile)
@@ -187,6 +221,31 @@ ssl_context_enable_sni(SSL_CTX * ctx, SSLCertLookup * lookup)
   return ctx;
 }
 
+#ifdef THREADED_PLUGIN_COMPATIBILITY
+
+void
+SSLInitializeLibrary()
+{
+  if (!open_ssl_initialized) {
+    CRYPTO_set_mem_functions(ats_malloc, ats_realloc, ats_free);
+
+    SSL_load_error_strings();
+    SSL_library_init();
+
+    mutex_buf = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() * sizeof(pthread_mutex_t));
+    
+    for (int i = 0;  i < CRYPTO_num_locks();  i++)
+            pthread_mutex_init(&mutex_buf[i], NULL);
+    
+    CRYPTO_set_locking_callback(SSL_locking_callback);
+    CRYPTO_set_id_callback(SSL_pthreads_thread_id);
+  }
+
+  open_ssl_initialized = true;
+}
+
+#else
+
 void
 SSLInitializeLibrary()
 {
@@ -208,6 +267,8 @@ SSLInitializeLibrary()
 
   open_ssl_initialized = true;
 }
+
+#endif
 
 void
 SSLDiagnostic(const SrcLoc& loc, bool debug, const char * fmt, ...)
